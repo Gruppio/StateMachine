@@ -179,7 +179,7 @@ void RecoveryState<Context>::handleState(StateMachine<Context> *stateMachine) {
   if (millis() > startTime + maxDuration) {
     stateMachine->setState(recoveryState);
   } else {
-    stateMachine->handleState(stateMachine);
+    stateMachine->handleState();
   }
 }
 
