@@ -68,6 +68,7 @@ public:
   State<Context>* throttle(unsigned long interval);
   State<Context>* delay(unsigned long interval);
   State<Context>* recoveryAfter(unsigned long maxDuration, State<Context> *recoveryState);
+  State<Context>* recoveryAfter(unsigned long maxDuration, State<Context> *recoveryState, State<Context> *recoverRecoveryState);
 };
 
 template <class Context>
@@ -86,6 +87,17 @@ template <class Context>
 State<Context>* State<Context>::recoveryAfter(unsigned long maxDuration, State<Context> *recoveryState)
 {
   return new RecoveryState<Context>(maxDuration, recoveryState, this);
+}
+
+template <class Context>
+State<Context>* State<Context>::recoveryAfter(unsigned long maxDuration, State<Context> *recoveryState, State<Context> *recoverRecoveryState)
+{
+  return new RecoveryState<Context>
+  (
+   maxDuration,
+   new RecoveryState<Context>(maxDuration, recoverRecoveryState, recoveryState),
+   this
+   );
 }
 
 // ThrottledState
