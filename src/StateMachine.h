@@ -31,13 +31,21 @@ public:
   Context context;
   
 private:
-  State<Context> *state;
+  State<Context> *state = 0;
+  State<Context> *newState = 0;
   
 public:
+  ~StateMachine();
   StateMachine(Context context, State<Context> *initialState);
   void setState(State<Context> *newState);
   void handleState();
 };
+
+template <class Context>
+StateMachine<Context>::~StateMachine() {
+  delete state;
+  delete newState;
+}
 
 template <class Context>
 StateMachine<Context>::StateMachine(Context context, State<Context> *initialState) : context(context),
@@ -48,13 +56,20 @@ state(initialState)
 template <class Context>
 void StateMachine<Context>::setState(State<Context> *newState)
 {
-  state = newState;
+  this->newState = newState;
 }
 
 template <class Context>
 void StateMachine<Context>::handleState()
 {
-  state->handleState(this);
+  if (newState != 0) {
+    newState->handleState(this);
+    delete state;
+    state = newState;
+    newState = 0;
+  } else {
+    state->handleState(this);
+  }
 }
 
 // State
@@ -63,6 +78,7 @@ template <class Context>
 class State
 {
 public:
+  virtual ~State();
   virtual void handleState(StateMachine<Context> *stateContext) = 0;
   
   State<Context>* throttle(unsigned long interval);
@@ -70,6 +86,11 @@ public:
   State<Context>* recoveryAfter(unsigned long maxDuration, State<Context> *recoveryState);
   State<Context>* recoveryAfter(unsigned long maxDuration, State<Context> *recoveryState, State<Context> *recoverRecoveryState);
 };
+
+template <class Context>
+State<Context>::~State()
+{
+}
 
 template <class Context>
 State<Context>* State<Context>::throttle(unsigned long interval)
@@ -107,18 +128,26 @@ class ThrottledState : public State<Context>
 {
 private:
   unsigned long interval;
-  State<Context> *nextState;
+  State<Context> *state;
   unsigned long lastTimeRunned = 0;
   
 public:
-  ThrottledState(unsigned long interval, State<Context> *nextState);
+  ~ThrottledState();
+  ThrottledState(unsigned long interval, State<Context> *state);
   void handleState(StateMachine<Context> *stateMachine);
 };
 
 template <class Context>
-ThrottledState<Context>::ThrottledState(unsigned long interval, State<Context> *nextState) :
+ThrottledState<Context>::~ThrottledState()
+{
+  delete state;
+  state = 0;
+}
+
+template <class Context>
+ThrottledState<Context>::ThrottledState(unsigned long interval, State<Context> *state) :
 interval(interval),
-nextState(nextState)
+state(state)
 {
 }
 
@@ -128,7 +157,7 @@ void ThrottledState<Context>::handleState(StateMachine<Context> *stateMachine)
   if (millis() >= lastTimeRunned + interval)
   {
     lastTimeRunned = millis();
-    nextState->handleState(stateMachine);
+    state->handleState(stateMachine);
   }
 }
 
@@ -139,24 +168,31 @@ class DelayedState : public State<Context>
 {
 private:
   unsigned long delayValue;
-  State<Context> *nextState;
+  State<Context> *state = NULL;
   unsigned long startTime = millis();
   
 public:
-  DelayedState(unsigned long delayValue, State<Context> *nextState);
+  ~DelayedState();
+  DelayedState(unsigned long delayValue, State<Context> *state);
   void handleState(StateMachine<Context> *stateMachine);
 };
 
 template <class Context>
-DelayedState<Context>::DelayedState(unsigned long delayValue, State<Context> *nextState):
+DelayedState<Context>::~DelayedState() {
+  delete state;
+  state = 0;
+}
+
+template <class Context>
+DelayedState<Context>::DelayedState(unsigned long delayValue, State<Context> *state):
 delayValue(delayValue),
-nextState(nextState) {
+state(state) {
 }
 
 template <class Context>
 void DelayedState<Context>::handleState(StateMachine<Context> *stateMachine) {
   if(millis() > startTime + delayValue) {
-    stateMachine->setState(nextState);
+    stateMachine->setState(state);
   }
 }
 
@@ -172,9 +208,20 @@ private:
   unsigned long startTime = 0;
   
 public:
+  ~RecoveryState();
   RecoveryState(unsigned long maxDuration, State<Context> *recoveryState, State<Context> *state);
   void handleState(StateMachine<Context> *stateMachine);
 };
+
+template <class Context>
+RecoveryState<Context>::~RecoveryState() {
+  if(state != NULL) {
+    delete recoveryState;
+    delete state;
+    recoveryState = 0;
+    state = 0;
+  }
+}
 
 template <class Context>
 RecoveryState<Context>::RecoveryState(unsigned long maxDuration, State<Context> *recoveryState, State<Context> *state):
@@ -190,6 +237,7 @@ void RecoveryState<Context>::handleState(StateMachine<Context> *stateMachine) {
   
   if (millis() > startTime + maxDuration) {
     stateMachine->setState(recoveryState);
+    delete state;
   } else {
     state->handleState(stateMachine);
   }
