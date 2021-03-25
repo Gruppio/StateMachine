@@ -8,6 +8,8 @@
 #ifndef StateMachine_h
 #define StateMachine_h
 
+#include <memory>
+
 extern unsigned long millis();
 
 template <class Context>
@@ -31,45 +33,37 @@ public:
   Context context;
   
 private:
-  State<Context> *state = 0;
-  State<Context> *newState = 0;
+  std::shared_ptr<State<Context>> state;
   
 public:
-  ~StateMachine();
   StateMachine(Context context, State<Context> *initialState);
   void setState(State<Context> *newState);
+  void setState(std::shared_ptr<State<Context>> newState);
   void handleState();
 };
 
 template <class Context>
-StateMachine<Context>::~StateMachine() {
-  delete state;
-  delete newState;
-}
-
-template <class Context>
 StateMachine<Context>::StateMachine(Context context, State<Context> *initialState) : context(context),
-state(initialState)
+state(std::shared_ptr<State<Context>>(initialState))
 {
 }
 
 template <class Context>
 void StateMachine<Context>::setState(State<Context> *newState)
 {
-  this->newState = newState;
+  state = std::shared_ptr<State<Context>>(newState);
+}
+
+template <class Context>
+void StateMachine<Context>::setState(std::shared_ptr<State<Context>> newState)
+{
+  state = newState;
 }
 
 template <class Context>
 void StateMachine<Context>::handleState()
 {
-  if (newState != 0) {
-    newState->handleState(this);
-    delete state;
-    state = newState;
-    newState = 0;
-  } else {
-    state->handleState(this);
-  }
+  state->handleState(this);
 }
 
 // State
@@ -128,26 +122,18 @@ class ThrottledState : public State<Context>
 {
 private:
   unsigned long interval;
-  State<Context> *state;
+  std::shared_ptr<State<Context>> state;
   unsigned long lastTimeRunned = 0;
   
 public:
-  ~ThrottledState();
   ThrottledState(unsigned long interval, State<Context> *state);
   void handleState(StateMachine<Context> *stateMachine);
 };
 
 template <class Context>
-ThrottledState<Context>::~ThrottledState()
-{
-  delete state;
-  state = 0;
-}
-
-template <class Context>
 ThrottledState<Context>::ThrottledState(unsigned long interval, State<Context> *state) :
 interval(interval),
-state(state)
+state(std::shared_ptr<State<Context>>(state))
 {
 }
 
@@ -168,25 +154,18 @@ class DelayedState : public State<Context>
 {
 private:
   unsigned long delayValue;
-  State<Context> *state = NULL;
+  std::shared_ptr<State<Context>> state;
   unsigned long startTime = millis();
   
 public:
-  ~DelayedState();
   DelayedState(unsigned long delayValue, State<Context> *state);
   void handleState(StateMachine<Context> *stateMachine);
 };
 
 template <class Context>
-DelayedState<Context>::~DelayedState() {
-  delete state;
-  state = 0;
-}
-
-template <class Context>
 DelayedState<Context>::DelayedState(unsigned long delayValue, State<Context> *state):
 delayValue(delayValue),
-state(state) {
+state(std::shared_ptr<State<Context>>(state)) {
 }
 
 template <class Context>
@@ -203,31 +182,20 @@ class RecoveryState : public State<Context>
 {
 private:
   unsigned long maxDuration;
-  State<Context> *recoveryState;
-  State<Context> *state;
+  std::shared_ptr<State<Context>> recoveryState;
+  std::shared_ptr<State<Context>> state;
   unsigned long startTime = 0;
   
 public:
-  ~RecoveryState();
   RecoveryState(unsigned long maxDuration, State<Context> *recoveryState, State<Context> *state);
   void handleState(StateMachine<Context> *stateMachine);
 };
 
 template <class Context>
-RecoveryState<Context>::~RecoveryState() {
-  if(state != NULL) {
-    delete recoveryState;
-    delete state;
-    recoveryState = 0;
-    state = 0;
-  }
-}
-
-template <class Context>
 RecoveryState<Context>::RecoveryState(unsigned long maxDuration, State<Context> *recoveryState, State<Context> *state):
 maxDuration(maxDuration),
-recoveryState(recoveryState),
-state(state) {
+recoveryState(std::shared_ptr<State<Context>>(recoveryState)),
+state(std::shared_ptr<State<Context>>(state)) {
 }
 
 template <class Context>
@@ -237,7 +205,6 @@ void RecoveryState<Context>::handleState(StateMachine<Context> *stateMachine) {
   
   if (millis() > startTime + maxDuration) {
     stateMachine->setState(recoveryState);
-    delete state;
   } else {
     state->handleState(stateMachine);
   }
