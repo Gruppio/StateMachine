@@ -6,7 +6,7 @@
       "type": "git",
       "url": "https://github.com/Gruppio/StateMachine.git"
     },
-    "version": "1.0.3",
+    "version": "1.0.4",
     "exclude": [
       "*.png",
       "*.zip"
