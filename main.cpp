@@ -67,5 +67,7 @@ int main(int argc, const char * argv[]) {
     stateMachine->handleState();
   }
   
+  delete stateMachine;
+  
   return 0;
 }
